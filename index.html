@@ -78,12 +78,35 @@
         const service = await server.getPrimaryService(SERVICE_UUID);
         bleChar = await service.getCharacteristic(CHAR_UUID);
         
+        // 💡 연결 직후 ESP32에서 현재 상태값 읽어오기
+        const value = await bleChar.readValue();
+        const decoder = new TextDecoder('utf-8');
+        const stateStr = decoder.decode(value); 
+        
+        // 읽어온 문자열 파싱 후 UI에 적용 (예: "R:128,G:20,B:0,W:255,Y:0,M:1")
+        if (stateStr && stateStr.includes(':')) {
+          const parts = stateStr.split(',');
+          parts.forEach(part => {
+            const [type, val] = part.split(':');
+            if (type === 'M') {
+              isMasterOn = (val === '1');
+              const btn = document.getElementById('masterBtn');
+              btn.className = isMasterOn ? 'btn btn-master' : 'btn btn-master off';
+              btn.innerText = isMasterOn ? '마스터 스위치 (현재 ON)' : '마스터 스위치 (현재 OFF)';
+            } else if (['R', 'G', 'B', 'W', 'Y'].includes(type)) {
+              updateNumber(type, val);
+              updateSlider(type, val);
+            }
+          });
+        }
+
         document.getElementById('status').innerText = `✅ 연결됨 (${device.name})`;
         document.getElementById('status').style.color = '#27ae60';
         document.getElementById('controlPanel').classList.remove('disabled-overlay');
         document.getElementById('connectBtn').style.display = 'none';
         
       } catch (error) {
+        console.error(error);
         document.getElementById('status').innerText = '연결 실패 (다시 시도하세요)';
       }
     }
@@ -100,7 +123,7 @@
     // ESP32로 데이터 전송
     async function sendBLE(type, value) {
       if (!bleChar) return;
-      const command = `${type}:${value}`; // 예: "R:255"
+      const command = `${type}:${value}`; 
       try {
         const encoder = new TextEncoder();
         await bleChar.writeValue(encoder.encode(command));
